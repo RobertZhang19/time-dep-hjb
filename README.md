@@ -64,7 +64,7 @@ typedef SimpleBoundaryCond2D                      TBC;
 typedef CachedImpLattice2D<func_F, func_G, TBC>   TLattice;
 ```
 Here `USE_TEST_XX` is the test case number. You can now enable this test case by define a flag `USE_TEST_XX` in `src/config.h` or add it in the compile flags.
-
+ 
 #### Example
 Turn on the testcase 07 (which is the experiment 4 in the paper) by providing a `config.h' in `src` directory
 ```C++

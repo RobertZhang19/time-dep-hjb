@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
     data = np.load(sys.argv[1])
-    print data.shape
+    print(data.shape)
     fig = plt.figure()
     #ax1  = fig.add_subplot(121, aspect='equal')
     ax1  = fig.add_subplot(111, aspect='equal')

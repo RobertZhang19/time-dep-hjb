@@ -48,7 +48,7 @@ struct HJBQuadraSolver2D : public QuadraParam2D
     double  ubound;
 
     inline void update_u_bound()
-    {   ubound = lastU - dt*gval; }
+    {   ubound = lastU - dt*gval*2.0; }
 
     inline double one_sided_solve_x() const
     {   
@@ -62,7 +62,7 @@ struct HJBQuadraSolver2D : public QuadraParam2D
 
     inline double one_sided_solve_y() const
     {
-        const double A = fval*dt - H.y;
+        const double A = 1.5*fval*dt - H.y;
         if ( M_IS_ZERO(A, 1E-11) ) return ubound;
 
         const double B = gval*dt*H.y - lastU*H.y + upU.y*fval*dt;
@@ -70,6 +70,29 @@ struct HJBQuadraSolver2D : public QuadraParam2D
         return ret >= upU.y ? ret : ubound;
     }
 
+    inline double two_sided_solve_xx() const
+    {
+        const double A = fval*dt - H.x;
+        if ( M_IS_ZERO(A, 1E-11) ) return ubound;
+
+        const double B = gval*dt*H.x - lastU*H.x + (2.0*upU.x-0.5*secondx)*fval*dt;
+        const double ret = B / A;
+        return ret >= upU.x ? ret : one_sided_solve_x();
+    }
+
+    inline double two_sided_solve_yy() const
+    {
+        const double A = fval*dt - H.y;
+        if ( M_IS_ZERO(A, 1E-11) ) return ubound;
+
+        const double B = gval*dt*H.y - lastU*H.y + (2.0*upU.y-0.5*secondy)*fval*dt;
+        const double ret = B / A;
+        return ret >= upU.y ? ret : one_sided_solve_y();
+    }
+
+
+
+  
     inline double two_sided_solve() const
     {
         double t1   = fval*dt;
@@ -101,8 +124,126 @@ struct HJBQuadraSolver2D : public QuadraParam2D
 
         return upU.x >= upU.y ? one_sided_solve_y() : one_sided_solve_x();
     }
+
+    
+
+
+
+
+
+    inline double two_sided_solve_xxy() const
+    {
+        double t1   = fval*dt;
+        double t2   = -2.0*upU.x + 0.5*secondx;
+        double t3   = -upU.y;
+        double t4   = gval*dt - lastU;
+        double invxresol = 1.0/(H.x*H.x);
+        double invyresol = 1.0/(H.y*H.y);
+        
+        /* the A,B,C coefficients for quadratic equation */
+        double A = (2.25 * invxresol + invyresol)*t1*t1 - 1;
+        double B = ( 3.0 * t2 * invxresol + 2.0 * t3 * invyresol )*t1*t1-2.0*t4;
+        double C = (t2*t2*invxresol + t3*t3*invyresol )*t1*t1-t4*t4;
+
+
+        if ( A < 0. ) { A = -A; B = -B; C = -C; }
+
+        double m = B*B - 4*A*C;
+        //MSG_ASSERT(m >= 0., "The quadratic equation should have real solution(m=%.4g)\n", m);
+        if ( m >= 0. )
+        {
+            m = sqrt(m);
+            double tu = (-B - m) / (2.*A);
+            if ( tu >= upU.x && tu >= upU.y ) return tu;
+
+            tu = (-B + m) / (2. * A);
+            if ( tu >= upU.x && tu >= upU.y ) return tu;
+        }
+
+        return upU.x >= upU.y ? one_sided_solve_y() : one_sided_solve_x();
+    }
+
+
+
+
+    inline double two_sided_solve_xyy() const
+    {
+        double t1   = fval*dt;
+        double t2   = -2.0*upU.y + 0.5*secondy;
+        double t3   = -upU.x;
+        double t4   = gval*dt - lastU;
+        double invxresol = 1.0/(H.x*H.x);
+        double invyresol = 1.0/(H.y*H.y);
+        
+        /* the A,B,C coefficients for quadratic equation */
+        double A = (2.25 * invyresol + invxresol)*t1*t1 - 1;
+        double B = ( 3.0 * t2 * invyresol + 2.0 * t3 * invxresol )*t1*t1-2.0*t4;
+        double C = (t2*t2*invyresol + t3*t3*invxresol )*t1*t1-t4*t4;
+
+
+        if ( A < 0. ) { A = -A; B = -B; C = -C; }
+
+        double m = B*B - 4*A*C;
+        //MSG_ASSERT(m >= 0., "The quadratic equation should have real solution(m=%.4g)\n", m);
+        if ( m >= 0. )
+        {
+            m = sqrt(m);
+            double tu = (-B - m) / (2.*A);
+            if ( tu >= upU.x && tu >= upU.y ) return tu;
+
+            tu = (-B + m) / (2. * A);
+            if ( tu >= upU.x && tu >= upU.y ) return tu;
+        }
+
+        return upU.x >= upU.y ? one_sided_solve_y() : one_sided_solve_x();
+    }
+
+    inline double two_sided_solve_xxyy() const
+    {
+        double t1   = fval*dt;
+        double t2   = -2.0*upU.y + 0.5*secondy;
+        double t3   = -2.0*upU.x + 0.5*secondx;
+        double t4   = gval*dt - lastU;
+        double invxresol = 1.0/(H.x*H.x);
+        double invyresol = 1.0/(H.y*H.y);
+        
+        /* the A,B,C coefficients for quadratic equation */
+        double A = 2.25 * (invxresol + invyresol)*t1*t1 - 1;
+        double B =  3.0 * (t2 * invxresol + t3 * invyresol )*t1*t1-2.0*t4;
+        double C = (t2*t2*invxresol + t3*t3*invyresol )*t1*t1-t4*t4;
+
+
+        if ( A < 0. ) { A = -A; B = -B; C = -C; }
+
+        double m = B*B - 4*A*C;
+        //MSG_ASSERT(m >= 0., "The quadratic equation should have real solution(m=%.4g)\n", m);
+        if ( m >= 0. )
+        {
+            m = sqrt(m);
+            double tu = (-B - m) / (2.*A);
+            if ( tu >= upU.x && tu >= upU.y ) return tu;
+
+            tu = (-B + m) / (2. * A);
+            if ( tu >= upU.x && tu >= upU.y ) return tu;
+        }
+
+        return upU.x >= upU.y ? one_sided_solve_y() : one_sided_solve_x();
+    }
+
+
+
 };
+
+
+ 
+
+
+
+
+
 
 
 #endif
 
+
+ 

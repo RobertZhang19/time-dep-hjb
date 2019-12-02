@@ -40,7 +40,11 @@ struct QuadraParam2D
 {
     vector2d            pos;
     vector2d            upU;
+    // use more nodes
+    double              secondx;
+    double              secondy;
     vector2d            H;
 };
 
 #endif
+ 

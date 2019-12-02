@@ -74,7 +74,10 @@ void TimeDepHJ2DEqu<_TLattice>::advance(double dt)
         curptr = pq_.pop();
         plattice_->fm_add_neighbors(curptr, pq_);
     }
+    // Retrieve v^n from 2 * u^n - v^{n+1}
+    plattice_->retrieve();
 }
-
+ 
 #endif
 
+ 

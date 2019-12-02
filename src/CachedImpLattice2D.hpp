@@ -74,6 +74,9 @@ class CachedImpLattice2D : public LatticeData2D
         //! Solve and add new neighbors to the queue 
         void fm_add_neighbors(const TNodeRec* curnode, TPQ& que);
 
+        //! Retrieve the value of the solution we want
+        void retrieve();
+
     private:
         double solve_node(int tx, int ty, int cdir);
 
@@ -89,7 +92,7 @@ class CachedImpLattice2D : public LatticeData2D
 };
 
 // --------------------------------------------------------------------------------------
-
+ 
 template<typename _F, typename _G, class _TBC>
 CachedImpLattice2D<_F, _G, _TBC>::CachedImpLattice2D(double lx, double ly, 
         int nx, int ny, _TBC* bc):LatticeData2D(lx, ly, nx, ny),
@@ -108,7 +111,7 @@ CachedImpLattice2D<_F, _G, _TBC>::CachedImpLattice2D(double lx, double ly,
         node.solver.H = H_;
     }
 }
-
+ 
 template<typename _F, typename _G, class _TBC>
 void CachedImpLattice2D<_F, _G, _TBC>::init(double ts)
 {
@@ -142,7 +145,7 @@ void CachedImpLattice2D<_F, _G, _TBC>::fm_begin_next_step(double ts, double dt, 
         que.push(&(nodes_[ty][tx].rec));
     }
 }
-
+ 
 template<typename _F, typename _G, class _TBC>
 void CachedImpLattice2D<_F, _G, _TBC>::fm_add_neighbors(const TNodeRec* curnode, TPQ& que)
 {
@@ -160,13 +163,14 @@ void CachedImpLattice2D<_F, _G, _TBC>::fm_add_neighbors(const TNodeRec* curnode,
                 // update f, g and u_bound
                 HJBQuadraSolver2D& solver = nodes_[ty][tx].solver;
                 TNodeRec&             rec = nodes_[ty][tx].rec;
-                solver.fval  = f_(solver.pos, ts_);
-                solver.gval  = g_(solver.pos, ts_);
+                solver.fval  = f_(solver.pos, (ts_+dt_/2)) * 0.5;
+                solver.gval  = g_(solver.pos, (ts_+dt_/2)) * 0.5;
                 solver.dt    = dt_;
                 solver.lastU = u_[1 - curUId_][ty][tx];
+
                 solver.update_u_bound();
 
-                double umin = solve_node(tx, ty, i);
+                double umin = solve_node(tx, ty, i);   //    Modify solve_node to use 2nd order method
                 labels_[ty][tx] = 1;
                 u_[curUId_][ty][tx] = rec.u = umin;
                 que.push(&rec);
@@ -185,6 +189,23 @@ void CachedImpLattice2D<_F, _G, _TBC>::fm_add_neighbors(const TNodeRec* curnode,
     }   // end for
 }
 
+
+
+
+template<typename _F, typename _G, class _TBC>
+void CachedImpLattice2D<_F, _G, _TBC>::retrieve()
+{
+    for(int iy = 0;iy <= RES_.y;++ iy)
+    for(int ix = 0;ix <= RES_.x;++ ix)
+    {
+        u_[curUId_][iy][ix] = 2*u_[curUId_][iy][ix] - u_[1-curUId_][iy][ix];
+    }
+}
+ 
+ 
+ 
+
+
 template<typename _F, typename _G, class _TBC>
 double CachedImpLattice2D<_F, _G, _TBC>::solve_node(int tx, int ty, int cdir)
 {
@@ -195,60 +216,138 @@ double CachedImpLattice2D<_F, _G, _TBC>::solve_node(int tx, int ty, int cdir)
     {
         solver.upU.x = u_[curUId_][ty][tx+SOLVE_DIR[cdir][1]];
 
+        // use 1 more point
+        int secondpt = tx+2*SOLVE_DIR[cdir][1];
+        bool switchcheckx = false;
+        bool switchchecky1 = false;
+        bool switchchecky2 = false;
+        switchcheckx = (secondpt <= RES_.x && secondpt >=0 && labels_[ty][secondpt]==2 && solver.upU.x >= u_[curUId_][ty][secondpt]);
+        
+
+
+
         int ttyMinus = ty - 1;
+        int tttyMinus = ty - 2;
         int ttyPlus  = ty + 1;
+        int tttyPlus  = ty + 2;
+
+        switchchecky1 = (tttyMinus >=0 && labels_[tttyMinus][tx]==2 && u_[curUId_][ttyMinus][tx] >= u_[curUId_][tttyMinus][tx]);
+        switchchecky2 = (tttyPlus <= RES_.y && labels_[tttyPlus][tx]==2 && u_[curUId_][ttyPlus][tx] >= u_[curUId_][tttyPlus][tx]);
+
         if ( ttyMinus >= 0 && labels_[ttyMinus][tx] > 1 )
         {
             if ( ttyPlus <= RES_.y && labels_[ttyPlus][tx] > 1 && 
                  u_[curUId_][ttyPlus][tx] < u_[curUId_][ttyMinus][tx] )
             {   // use ty+1
                 solver.upU.y = u_[curUId_][ttyPlus][tx];
-                ret = fmin(ret, solver.two_sided_solve());
+                // ret = fmin(ret, solver.two_sided_solve());
+                // try to use ty+2
+                if (switchchecky2)
+                { solver.secondy = u_[curUId_][tttyPlus][tx]; if(switchcheckx) {solver.secondx = u_[curUId_][ty][secondpt]; ret = fmin(ret, solver.two_sided_solve_xxyy()); } else {ret = fmin(ret, solver.two_sided_solve_xyy()) ;}  }
+                else if(switchcheckx)
+                { solver.secondx = u_[curUId_][ty][secondpt]; ret = fmin(ret, solver.two_sided_solve_xxy()); }
+                else 
+                {ret = fmin(ret, solver.two_sided_solve());}
+
             }
             else
             {   // use ty-1
                 solver.upU.y = u_[curUId_][ttyMinus][tx];
-                ret = fmin(ret, solver.two_sided_solve());
+                // ret = fmin(ret, solver.two_sided_solve());
+                if (switchchecky1)
+                { solver.secondy = u_[curUId_][tttyMinus][tx]; if(switchcheckx) {solver.secondx = u_[curUId_][ty][secondpt]; ret = fmin(ret, solver.two_sided_solve_xxyy()); } else {ret = fmin(ret, solver.two_sided_solve_xyy()) ;}  }
+                else if(switchcheckx)
+                { solver.secondx = u_[curUId_][ty][secondpt]; ret = fmin(ret, solver.two_sided_solve_xxy()); }
+                else 
+                {ret = fmin(ret, solver.two_sided_solve());}
+
             }
         }
         else if ( ttyPlus <= RES_.y && labels_[ttyPlus][tx] > 1 )
         {
             solver.upU.y = u_[curUId_][ttyPlus][tx];
-            ret = fmin(ret, solver.two_sided_solve());
+            // ret = fmin(ret, solver.two_sided_solve());
+            if (switchchecky2)
+            { solver.secondy = u_[curUId_][tttyPlus][tx]; if(switchcheckx) {solver.secondx = u_[curUId_][ty][secondpt]; ret = fmin(ret, solver.two_sided_solve_xxyy()); } else {ret = fmin(ret, solver.two_sided_solve_xyy()) ;}  }
+            else if(switchcheckx)
+            { solver.secondx = u_[curUId_][ty][secondpt]; ret = fmin(ret, solver.two_sided_solve_xxy()); }
+            else 
+            {ret = fmin(ret, solver.two_sided_solve());}
         }
         else
         {
-            ret = fmin(ret, solver.one_sided_solve_x());
+            // ret = fmin(ret, solver.one_sided_solve_x());
+            if(switchcheckx) 
+            {solver.secondx = u_[curUId_][ty][secondpt]; ret = fmin(ret, solver.two_sided_solve_xx()); }
+            else
+            {ret = fmin(ret, solver.one_sided_solve_x()) ;}
         }
     }
     else                        // x dir
     {
         solver.upU.y = u_[curUId_][ty+SOLVE_DIR[cdir][1]][tx];
 
+        int secondpt = ty+2*SOLVE_DIR[cdir][1];
+        bool switchchecky = false;
+        bool switchcheckx1 = false;
+        bool switchcheckx2 = false;
+        switchchecky = (secondpt <= RES_.y) && (secondpt >=0) && (labels_[secondpt][tx]==2) && (solver.upU.y >= u_[curUId_][secondpt][tx]);
+
+
         int ttxMinus = tx - 1;
-        int ttxPlus  = tx + 1;
+        int tttxMinus = tx - 2;
+        int ttxPlus = tx + 1;
+        int tttxPlus  = tx + 2;
+
+        switchcheckx1 = (tttxMinus >=0 && labels_[ty][tttxMinus]==2 && u_[curUId_][ty][ttxMinus] >= u_[curUId_][ty][tttxMinus]);
+        switchcheckx2 = (tttxPlus <= RES_.y && labels_[ty][tttxPlus]==2 && u_[curUId_][ty][ttxPlus] >= u_[curUId_][ty][tttxPlus]);
+
         if ( ttxMinus >= 0 && labels_[ty][ttxMinus] > 1 )
         {
             if ( ttxPlus <= RES_.x && labels_[ty][ttxPlus] > 1 &&
                  u_[curUId_][ty][ttxPlus] < u_[curUId_][ty][ttxMinus] )
             {
                 solver.upU.x = u_[curUId_][ty][ttxPlus];
-                ret = fmin(ret, solver.two_sided_solve());
+                // ret = fmin(ret, solver.two_sided_solve());
+                // use tx+1
+                if (switchcheckx2)
+                { solver.secondx = u_[curUId_][ty][tttxPlus]; if(switchchecky) {solver.secondy = u_[curUId_][secondpt][tx]; ret = fmin(ret, solver.two_sided_solve_xxyy()); } else {ret = fmin(ret, solver.two_sided_solve_xxy()) ;}  }
+                else if(switchchecky)
+                { solver.secondy = u_[curUId_][secondpt][tx]; ret = fmin(ret, solver.two_sided_solve_xyy()); }
+                else 
+                {ret = fmin(ret, solver.two_sided_solve());}
+                //
             }
             else
             {
                 solver.upU.x = u_[curUId_][ty][ttxMinus];
-                ret = fmin(ret, solver.two_sided_solve());
+                // ret = fmin(ret, solver.two_sided_solve());
+                if (switchcheckx1)
+                { solver.secondx = u_[curUId_][ty][tttxMinus]; if(switchchecky) {solver.secondy = u_[curUId_][secondpt][tx]; ret = fmin(ret, solver.two_sided_solve_xxyy()); } else {ret = fmin(ret, solver.two_sided_solve_xxy()) ;}  }
+                else if(switchchecky)
+                { solver.secondy = u_[curUId_][secondpt][tx]; ret = fmin(ret, solver.two_sided_solve_xyy()); }
+                else 
+                {ret = fmin(ret, solver.two_sided_solve());}
             }
         }
         else if ( ttxPlus <= RES_.x && labels_[ty][ttxPlus] > 1 )
         {
             solver.upU.x = u_[curUId_][ty][ttxPlus];
-            ret = fmin(ret, solver.two_sided_solve());
+            // ret = fmin(ret, solver.two_sided_solve());
+            if (switchcheckx2)
+            { solver.secondx = u_[curUId_][ty][tttxPlus]; if(switchchecky) {solver.secondy = u_[curUId_][secondpt][tx]; ret = fmin(ret, solver.two_sided_solve_xxyy()); } else {ret = fmin(ret, solver.two_sided_solve_xxy()) ;}  }
+            else if(switchchecky)
+            { solver.secondy = u_[curUId_][secondpt][tx]; ret = fmin(ret, solver.two_sided_solve_xyy()); }
+            else 
+            {ret = fmin(ret, solver.two_sided_solve());}
         }
         else
         {
-            ret = fmin(ret, solver.one_sided_solve_y());
+            // ret = fmin(ret, solver.one_sided_solve_y());
+            if(switchchecky) 
+            {solver.secondy = u_[curUId_][secondpt][tx]; ret = fmin(ret, solver.two_sided_solve_yy()); }
+            else
+            {ret = fmin(ret, solver.one_sided_solve_y()) ;}
         }
     }
 
@@ -256,3 +355,5 @@ double CachedImpLattice2D<_F, _G, _TBC>::solve_node(int tx, int ty, int cdir)
 }
 
 #endif
+ 
+   
