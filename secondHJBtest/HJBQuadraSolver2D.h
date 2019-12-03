@@ -52,7 +52,7 @@ struct HJBQuadraSolver2D : public QuadraParam2D
 
     inline double one_sided_solve_x() const
     {   
-        const double A = fval*dt - H.x;
+        const double A = fval*dt ;
         if ( M_IS_ZERO(A, 1E-11) ) return ubound;
 
         const double B = gval*dt*H.x - lastU*H.x + upU.x*fval*dt;
@@ -62,7 +62,7 @@ struct HJBQuadraSolver2D : public QuadraParam2D
 
     inline double one_sided_solve_y() const
     {
-        const double A = fval*dt - H.y;
+        const double A = 1.5*fval*dt ;
         if ( M_IS_ZERO(A, 1E-11) ) return ubound;
 
         const double B = gval*dt*H.y - lastU*H.y + upU.y*fval*dt;
@@ -72,7 +72,7 @@ struct HJBQuadraSolver2D : public QuadraParam2D
 
     inline double two_sided_solve_xx() const
     {
-        const double A = 1.5*fval*dt - H.x;
+        const double A = 1.5*fval*dt ;
         if ( M_IS_ZERO(A, 1E-11) ) return ubound;
 
         const double B = gval*dt*H.x - lastU*H.x + (2.0*upU.x-0.5*secondx)*fval*dt;
@@ -82,7 +82,7 @@ struct HJBQuadraSolver2D : public QuadraParam2D
 
     inline double two_sided_solve_yy() const
     {
-        const double A = 1.5*fval*dt - H.y;
+        const double A = 1.5*fval*dt ;
         if ( M_IS_ZERO(A, 1E-11) ) return ubound;
 
         const double B = gval*dt*H.y - lastU*H.y + (2.0*upU.y-0.5*secondy)*fval*dt;
@@ -100,13 +100,19 @@ struct HJBQuadraSolver2D : public QuadraParam2D
         t1 = gval*dt - lastU;                   // g*dt - U^{n+1}
 
         /* the A,B,C coefficients for quadratic equation */
-        double A = - fdt2;              // negative value
-        double B = - 2.*t1*fdt2;
+        double A = 0.0;
+        double B = 0.0;
         double C = - t1*t1*fdt2;
         double hinv = 1. / (H.x*H.y);
         A += hinv*2.;
         B -= 2.*hinv*(upU.x + upU.y);
         C += (upU.x*upU.x + upU.y*upU.y)*hinv;
+
+
+
+
+
+
 
         if ( A < 0. ) { A = -A; B = -B; C = -C; }
 
@@ -141,8 +147,8 @@ struct HJBQuadraSolver2D : public QuadraParam2D
         double invyresol = 1.0/(H.y*H.y);
         
         /* the A,B,C coefficients for quadratic equation */
-        double A = (2.25 * invxresol + invyresol)*t1*t1 - 1;
-        double B = ( 3.0 * t2 * invxresol + 2.0 * t3 * invyresol )*t1*t1-2.0*t4;
+        double A = (2.25 * invxresol + invyresol)*t1*t1 ;
+        double B = ( 3.0 * t2 * invxresol + 2.0 * t3 * invyresol )*t1*t1;
         double C = (t2*t2*invxresol + t3*t3*invyresol )*t1*t1-t4*t4;
 
 
@@ -176,8 +182,8 @@ struct HJBQuadraSolver2D : public QuadraParam2D
         double invyresol = 1.0/(H.y*H.y);
         
         /* the A,B,C coefficients for quadratic equation */
-        double A = (2.25 * invyresol + invxresol)*t1*t1 - 1;
-        double B = ( 3.0 * t2 * invyresol + 2.0 * t3 * invxresol )*t1*t1-2.0*t4;
+        double A = (2.25 * invyresol + invxresol)*t1*t1 ;
+        double B = ( 3.0 * t2 * invyresol + 2.0 * t3 * invxresol )*t1*t1;
         double C = (t2*t2*invyresol + t3*t3*invxresol )*t1*t1-t4*t4;
 
 
@@ -208,8 +214,8 @@ struct HJBQuadraSolver2D : public QuadraParam2D
         double invyresol = 1.0/(H.y*H.y);
         
         /* the A,B,C coefficients for quadratic equation */
-        double A = 2.25 * (invxresol + invyresol)*t1*t1 - 1;
-        double B =  3.0 * (t2 * invxresol + t3 * invyresol )*t1*t1-2.0*t4;
+        double A = 2.25 * (invxresol + invyresol)*t1*t1 ;
+        double B =  3.0 * (t2 * invxresol + t3 * invyresol )*t1*t1;
         double C = (t2*t2*invxresol + t3*t3*invyresol )*t1*t1-t4*t4;
 
 
